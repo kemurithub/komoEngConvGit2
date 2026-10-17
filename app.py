@@ -140,7 +140,7 @@ if st.session_state.page == "mypage":
 
 # 【STEP 1：テキストファイルの読み込み】
 elif st.session_state.page == "step1":
-    st.title("🗣️ ロールプレイ＆学習アプリ")
+    st.title("🗣️ komoEngConvApp_2")
     st.subheader("STEP 1: テキストファイルの読み込み")
     st.write("前半アプリで作成したテキストファイルをアップロードするか、下のボックスに直接貼り付けてください。")
     
