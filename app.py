@@ -207,4 +207,9 @@ elif st.session_state.page == "step2":
     speakers = st.session_state.speakers
     
     if speakers:
-        st.session_state.user_role = st.selectbox("あなたの役を選んでください：", speakers, index=speakers.index(st.session_state.user_role) if st.session_state.user_role in speakers
+        default_idx = 0
+        if st.session_state.user_role in speakers:
+            default_idx = speakers.index(st.session_state.user_role)
+        st.session_state.user_role = st.selectbox("あなたの役を選んでください：", speakers, index=default_idx)
+    
+    st.markdown("---")
