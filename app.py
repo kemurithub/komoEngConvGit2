@@ -10,7 +10,7 @@ import calendar
 # ==========================================
 st.set_page_config(
     page_title="komoEngConv2026-Part2",
-    page_icon="🎧",
+    page_icon="🗣️",
     layout="centered",
     initial_sidebar_state="expanded"
 )
@@ -83,7 +83,7 @@ def parse_text_content(text):
 
 # --- サイドバー：ナビゲーション ---
 with st.sidebar:
-    st.title("🎧 後半アプリメニュー")
+    st.title("🗣️ 後半アプリメニュー")
     if st.button("🏠 マイページ（履歴一覧）"):
         st.session_state.page = "mypage"
         st.rerun()
