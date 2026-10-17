@@ -65,7 +65,8 @@ def parse_text_content(text):
         if line.startswith("**") and ":" in line:
             parts = line.split(":", 1)
             speaker = parts[0].replace("**", "").replace("*", "").strip()
-            dialog_text = parts[1].strip()
+            # セリフ中のマークダウン記号もきれいにしておく
+            dialog_text = parts[1].replace("**", "").replace("*", "").strip()
             parsed_dialogs.append({"speaker": speaker, "text": dialog_text})
             speakers_set.add(speaker)
             
@@ -184,7 +185,7 @@ elif st.session_state.page == "step1_5":
     st.text_area("英語セリフ部分", extracted_dialog_text, height=200, disabled=True)
     
     if st.button("🔊 ダイアログ全体を音声読み上げする"):
-        pure_text_lines = [d['text'] for d in st.session_state.dialogs]
+        pure_text_lines = [d['text'].replace("**", "").replace("*", "") for d in st.session_state.dialogs]
         full_speech_text = " ".join(pure_text_lines)
         if full_speech_text:
             tts = gTTS(text=full_speech_text, lang='en')
@@ -219,7 +220,8 @@ elif st.session_state.page == "step2":
         else:
             st.warning(f"🤖 **{d['speaker']} (AI):** {d['text']}")
             if st.button(f"🔊 {d['speaker']} のセリフを聴く (行 {idx+1})", key=f"audio_{idx}"):
-                tts = gTTS(text=d['text'], lang='en')
+                clean_speech_text = d['text'].replace("**", "").replace("*", "")
+                tts = gTTS(text=clean_speech_text, lang='en')
                 fp = io.BytesIO()
                 tts.write_to_fp(fp)
                 fp.seek(0)
@@ -262,28 +264,4 @@ elif st.session_state.page == "motivation":
     st.info(f"🔥 現在の連続学習日数: **{st.session_state.streak_count} 日目**")
     
     st.markdown("### 🤖 AIからの褒めメッセージ ＆ バッジ")
-    st.markdown("> *「両方の役柄でのロールプレイを完璧にやり遂げましたね！声に出して練習した分だけ、英語表現が確実に身体に染み込んでいます。素晴らしい継続力です！」*")
-    st.markdown("🏅 **獲得バッジ:** 【完全燃焼チャレンジャー】")
-    
-    st.markdown("---")
-    
-    # 💡 学習のポイント（Tips）の表示
-    st.markdown("### 💡 本日の学習のポイント ＆ Tips")
-    if st.session_state.tips_text:
-        st.markdown(st.session_state.tips_text)
-    else:
-        st.info("今日のスクリプトに関する特別なポイントはありません。たくさん声に出して練習したことが最高の財産です！")
-        
-    st.markdown("---")
-    
-    # マイページへ飛ぶボタン
-    if st.button("📚 マイページ（履歴）を確認する"):
-        st.session_state.page = "mypage"
-        st.rerun()
-        
-    st.markdown("")
-    
-    # 今日の学習を終了して最初の画面に戻るボタン
-    if st.button("🏠 今日の学習を終了して最初の画面に戻る"):
-        st.session_state.page = "step1"
-        st.rerun()
+    st.markdown("> *「両方の役柄でのロールプレイを完璧にやり遂
