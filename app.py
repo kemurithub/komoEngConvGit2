@@ -172,7 +172,7 @@ elif st.session_state.page == "step1":
         else:
             st.warning("⚠️ テキストファイルがアップロードされていないか、中身が空です。")
 
-# 【STEP 1.5：スクリプト表示と音声読み上げ】
+# 【STEP 1.5：スクリプト確認と音声読み上げ】
 elif st.session_state.page == "step1_5":
     st.subheader("STEP 1.5: スクリプト確認と音声読み上げ")
     st.write("読み込んだスクリプトです。話者名を除いたセリフ部分を音声で確認できます。")
@@ -198,7 +198,7 @@ elif st.session_state.page == "step1_5":
         st.session_state.page = "step2"
         st.rerun()
 
-# 【STEP 2：ロールプレイ実践（全体一覧表示 ＆ 選択した役で切り替え）】
+# 【STEP 2：ロールプレイ実践】
 elif st.session_state.page == "step2":
     st.subheader("STEP 2: ロールプレイ実践")
     st.write("スクリプト全体を見ながら、自分の役のセリフは声に出して練習し、AIの役のセリフは音声ボタンで聞いて確認しましょう。両方の役柄で練習してみてください。")
@@ -210,6 +210,82 @@ elif st.session_state.page == "step2":
         default_idx = 0
         if st.session_state.user_role in speakers:
             default_idx = speakers.index(st.session_state.user_role)
-        st.session_state.user_role = st.selectbox("あなたの役を選んでください：", speakers, index=default_idx)
+            
+        # on_changeで選んだ瞬間に確実に対応させる
+        def role_changed():
+            st.session_state.user_role = st.session_state.role_selectbox
+            
+        selected_role = st.selectbox(
+            "あなたの役を選んでください：", 
+            speakers, 
+            index=default_idx, 
+            key="role_selectbox",
+            on_change=role_changed
+        )
+        # 初期読み込み時の同期
+        if not st.session_state.user_role:
+            st.session_state.user_role = selected_role
     
     st.markdown("---")
+    
+    for idx, d in enumerate(dialogs):
+        is_user_turn = (d["speaker"] == st.session_state.user_role)
+        
+        if is_user_turn:
+            st.info(f"👤 **{d['speaker']} (あなた):** {d['text']}  \n👉 *声に出して練習しましょう！*")
+        else:
+            st.warning(f"🤖 **{d['speaker']} (AI):** {d['text']}")
+            if st.button(f"🔊 {d['speaker']} のセリフを聴く (行 {idx+1})", key=f"audio_{idx}"):
+                clean_speech_text = d['text'].replace("**", "").replace("*", "")
+                tts = gTTS(text=clean_speech_text, lang='en')
+                fp = io.BytesIO()
+                tts.write_to_fp(fp)
+                fp.seek(0)
+                st.audio(fp, format='audio/mp3', autoplay=True)
+        st.markdown("")
+
+    st.markdown("---")
+    
+    # 役柄交代ボタン
+    if len(speakers) >= 2:
+        other_role = speakers[1] if st.session_state.user_role == speakers[0] else speakers[0]
+        if st.button(f"🔄 役柄を交代する（次は「{other_role}」役で練習する）"):
+            st.session_state.user_role = other_role
+            st.rerun()
+
+    st.markdown("---")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("⬅️ スクリプト確認に戻る"):
+            st.session_state.page = "step1_5"
+            st.rerun()
+    with col2:
+        if st.button("🎉 ロールプレイ完了！結果を見る"):
+            st.session_state.page = "motivation"
+            st.rerun()
+
+# 【モチベーション機能 ＆ Tips ＆ 終了画面】
+elif st.session_state.page == "motivation":
+    st.title("🌟 本日の学習お疲れ様でした！")
+    
+    # スタンプ・連続日数のカウント処理（会話練習完了時に即座に実行）
+    today_str = datetime.date.today().strftime("%Y-%m-%d")
+    if st.session_state.last_study_date != today_str:
+        st.session_state.streak_count += 1
+        st.session_state.last_study_date = today_str
+        
+    # 画面表示
+    st.markdown("### 🏆 学習スタンプ獲得！")
+    st.success(f"ポンッ！ 🎯 本日の学習スタンプが押されました！")
+    st.info(f"🔥 現在の連続学習日数: **{st.session_state.streak_count} 日目**")
+    
+    st.markdown("### 🤖 AIからの褒めメッセージ ＆ バッジ")
+    st.markdown("> *「両方の役柄でのロールプレイを完璧にやり遂げましたね！声に出して練習した分だけ、英語表現が確実に身体に染み込んでいます。素晴らしい継続力です！」*")
+    st.markdown("🏅 **獲得バッジ:** 【完全燃焼チャレンジャー】")
+    
+    st.markdown("---")
+    
+    # 💡 学習のポイント（Tips）の表示
+    st.markdown("### 💡 本日の学習のポイント ＆ Tips")
+    if st.session_state.tips_text:
+        st.markdown(st.session_state.tips_text)
