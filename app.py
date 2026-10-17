@@ -3,6 +3,7 @@ import google.generativeai as genai
 from gtts import gTTS
 import io
 import datetime
+import calendar
 
 # ==========================================
 # ページの設定
@@ -43,6 +44,8 @@ if "streak_count" not in st.session_state:
     st.session_state.streak_count = 1
 if "last_study_date" not in st.session_state:
     st.session_state.last_study_date = ""
+if "studied_dates" not in st.session_state:
+    st.session_state.studied_dates = set()
 
 # --- ヘルパー関数: テキストから話者・セリフ・ポイント（Tips）を抽出 ---
 def parse_text_content(text):
@@ -211,7 +214,6 @@ elif st.session_state.page == "step2":
         if st.session_state.user_role in speakers:
             default_idx = speakers.index(st.session_state.user_role)
             
-        # on_changeで選んだ瞬間に確実に対応させる
         def role_changed():
             st.session_state.user_role = st.session_state.role_selectbox
             
@@ -222,7 +224,6 @@ elif st.session_state.page == "step2":
             key="role_selectbox",
             on_change=role_changed
         )
-        # 初期読み込み時の同期
         if not st.session_state.user_role:
             st.session_state.user_role = selected_role
     
@@ -264,28 +265,79 @@ elif st.session_state.page == "step2":
             st.session_state.page = "motivation"
             st.rerun()
 
-# 【モチベーション機能 ＆ Tips ＆ 終了画面】
+# 【モチベーション機能 ＆ カレンダー風スタンプ ＆ 終了画面】
 elif st.session_state.page == "motivation":
     st.title("🌟 本日の学習お疲れ様でした！")
     
-    # スタンプ・連続日数のカウント処理（会話練習完了時に即座に実行）
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
+    # スタンプ・連続日数のカウント処理
+    today = datetime.date.today()
+    today_str = today.strftime("%Y-%m-%d")
+    
     if st.session_state.last_study_date != today_str:
         st.session_state.streak_count += 1
         st.session_state.last_study_date = today_str
+        
+    st.session_state.studied_dates.add(today_str)
         
     # 画面表示
     st.markdown("### 🏆 学習スタンプ獲得！")
     st.success(f"ポンッ！ 🎯 本日の学習スタンプが押されました！")
     st.info(f"🔥 現在の連続学習日数: **{st.session_state.streak_count} 日目**")
     
-    st.markdown("### 🤖 AIからの褒めメッセージ ＆ バッジ")
-    st.markdown("> *「両方の役柄でのロールプレイを完璧にやり遂げましたね！声に出して練習した分だけ、英語表現が確実に身体に染み込んでいます。素晴らしい継続力です！」*")
-    st.markdown("🏅 **獲得バッジ:** 【完全燃焼チャレンジャー】")
+    # カレンダービューの表示（当月）
+    st.markdown("### 📅 学習カレンダー（スタンプ帳）")
+    year = today.year
+    month = today.month
     
+    cal = calendar.monthcalendar(year, month)
+    month_name = today.strftime("%Y年 %B")
+    
+    st.markdown(f"**{month_name}**")
+    
+    cols = st.columns(7)
+    days_of_week = ["月", "火", "水", "木", "金", "土", "日"]
+    for i, day_name in enumerate(days_of_week):
+        cols[i].markdown(f"<div style='text-align: center;'><b>{day_name}</b></div>", unsafe_allow_html=True)
+        
+    for week in cal:
+        cols = st.columns(7)
+        for i, day in enumerate(week):
+            if day == 0:
+                cols[i].markdown("<div style='text-align: center; color: #ccc;'>-</div>", unsafe_allow_html=True)
+            else:
+                date_obj = datetime.date(year, month, day)
+                date_str = date_obj.strftime("%Y-%m-%d")
+                if date_str in st.session_state.studied_dates:
+                    cols[i].markdown(f"<div style='text-align: center; background-color: #d4edda; border-radius: 5px; padding: 4px;'><b>{day}</b><br>⭐</div>", unsafe_allow_html=True)
+                else:
+                    cols[i].markdown(f"<div style='text-align: center; padding: 4px;'>{day}</div>", unsafe_allow_html=True)
+                    
     st.markdown("---")
     
     # 💡 学習のポイント（Tips）の表示
     st.markdown("### 💡 本日の学習のポイント ＆ Tips")
     if st.session_state.tips_text:
         st.markdown(st.session_state.tips_text)
+    else:
+        st.info("今日のスクリプトに関する特別なポイントはありません。たくさん声に出して練習したことが最高の財産です！")
+        
+    st.markdown("---")
+    
+    # 🤖 Tipsをふまえた自然な褒めメッセージ
+    st.markdown("### 🤖 本日の振り返りコメント")
+    tips_summary = st.session_state.tips_text if st.session_state.tips_text else "自然な表現"
+    st.markdown(f"> *「両方の役柄でしっかり声に出して練習できましたね！今回のポイント（{tips_summary[:40]}...等）を意識しながら会話のキャッチーなニュアンスを掴めたのは素晴らしいアプローチです。この調子で自分の言葉として定着させていきましょう！」*")
+    
+    st.markdown("---")
+    
+    # マイページへ飛ぶボタン
+    if st.button("📚 マイページ（履歴）を確認する"):
+        st.session_state.page = "mypage"
+        st.rerun()
+        
+    st.markdown("")
+    
+    # 今日の学習を終了して最初の画面に戻るボタン
+    if st.button("🏠 今日の学習を終了して最初の画面に戻る"):
+        st.session_state.page = "step1"
+        st.rerun()
