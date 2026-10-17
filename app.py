@@ -164,8 +164,11 @@ elif st.session_state.page == "step1_5":
     st.subheader("STEP 1.5: スクリプト確認と音声読み上げ")
     st.write("読み込んだスクリプトです。話者名を除いたセリフ部分を音声で確認できます。")
     
-    st.markdown("### 📄 読み込み結果")
-    st.text_area("スクリプト全体", st.session_state.raw_text, height=200, disabled=True)
+    st.markdown("### 📄 抽出された英語スクリプト")
+    
+    # 抽出したダイアログを改行でつないで表示する
+    extracted_dialog_text = "\n".join(st.session_state.dialogs)
+    st.text_area("英語セリフ部分", extracted_dialog_text, height=200, disabled=True)
     
     if st.button("🔊 ダイアログ全体を音声読み上げする"):
         # 話者名（**等）を除去してgTTSで読み上げ
