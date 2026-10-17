@@ -26,31 +26,27 @@ model = genai.GenerativeModel('gemini-2.5-flash')
 
 # --- セッション状態の初期化 ---
 if "page" not in st.session_state:
-    st.session_state.page = "step1"  # "step1", "step1_5", "step2", "step3", "step8", "motivation", "mypage"
+    st.session_state.page = "step1"  # "step1", "step1_5", "step2", "step8", "motivation", "mypage"
 if "raw_text" not in st.session_state:
     st.session_state.raw_text = ""
 if "dialogs" not in st.session_state:
-    st.session_state.dialogs = []  # [(speaker, text), ...]
-if "step2_index" not in st.session_state:
-    st.session_state.step2_index = 0
-if "step3_index" not in st.session_state:
-    st.session_state.step3_index = 0
+    st.session_state.dialogs = []  # [{'speaker': 'Daichi', 'text': '...'}, ...]
+if "speakers" not in st.session_state:
+    st.session_state.speakers = []
+if "user_role" not in st.session_state:
+    st.session_state.user_role = ""
 if "quiz_data" not in st.session_state:
-    st.session_state.quiz_data = []
+    st.session_state.quiz_data = ""
 if "quiz_submitted" not in st.session_state:
     st.session_state.quiz_submitted = False
-if "quiz_score" not in st.session_state:
-    st.session_state.quiz_score = 0
-if "completed_today" not in st.session_state:
-    st.session_state.completed_today = False
 if "history" not in st.session_state:
-    st.session_state.history = []  # 過去の履歴リスト
+    st.session_state.history = []
 if "streak_count" not in st.session_state:
     st.session_state.streak_count = 1
 if "last_study_date" not in st.session_state:
     st.session_state.last_study_date = ""
 
-# --- ヘルパー関数: テキストから英語完成スクリプト部分だけを正確に抽出 ---
+# --- ヘルパー関数: テキストから話者とセリフを正確に抽出 ---
 def parse_dialogs(text):
     target_section = text
     if "【英語完成スクリプト】" in text:
@@ -64,12 +60,18 @@ def parse_dialogs(text):
 
     lines = target_section.split('\n')
     parsed = []
+    speakers_set = set()
+    
     for line in lines:
         line = line.strip()
         if line.startswith("**") and ":" in line:
-            parsed.append(line)
+            parts = line.split(":", 1)
+            speaker = parts[0].replace("**", "").replace("*", "").strip()
+            dialog_text = parts[1].strip()
+            parsed.append({"speaker": speaker, "text": dialog_text})
+            speakers_set.add(speaker)
             
-    return parsed if parsed else [l for l in text.split('\n') if l.strip()]
+    return parsed, list(speakers_set)
 
 # --- サイドバー：ナビゲーション ---
 with st.sidebar:
@@ -91,10 +93,9 @@ with st.sidebar:
         st.session_state.page = "step1"
         st.session_state.raw_text = ""
         st.session_state.dialogs = []
-        st.session_state.step2_index = 0
-        st.session_state.step3_index = 0
+        st.session_state.speakers = []
+        st.session_state.user_role = ""
         st.session_state.quiz_submitted = False
-        st.session_state.completed_today = False
         st.rerun()
 
 # ==========================================
@@ -115,11 +116,12 @@ if st.session_state.page == "mypage":
                 st.text(hist['title'][:50] + "...")
                 if st.button(f"📂 このスクリプトで学習を再開する #{idx+1}", key=f"load_hist_{idx}"):
                     st.session_state.raw_text = hist['text']
-                    st.session_state.dialogs = parse_dialogs(hist['text'])
-                    st.session_state.step2_index = 0
-                    st.session_state.step3_index = 0
+                    dialogs_list, speakers_list = parse_dialogs(hist['text'])
+                    st.session_state.dialogs = dialogs_list
+                    st.session_state.speakers = speakers_list
+                    if speakers_list:
+                        st.session_state.user_role = speakers_list[1] if len(speakers_list) > 1 else speakers_list[0]
                     st.session_state.quiz_submitted = False
-                    st.session_state.completed_today = False
                     st.session_state.page = "step1_5"
                     st.rerun()
                 st.markdown("---")
@@ -146,7 +148,12 @@ elif st.session_state.page == "step1":
     if st.button("読み込みを完了して次へ進む"):
         if target_text.strip():
             st.session_state.raw_text = target_text
-            st.session_state.dialogs = parse_dialogs(target_text)
+            dialogs_list, speakers_list = parse_dialogs(target_text)
+            st.session_state.dialogs = dialogs_list
+            st.session_state.speakers = speakers_list
+            if speakers_list:
+                st.session_state.user_role = speakers_list[1] if len(speakers_list) > 1 else speakers_list[0]
+            
             # 履歴に追加
             today_str = datetime.date.today().strftime("%Y-%m-%d %H:%M")
             st.session_state.history.append({
@@ -166,19 +173,12 @@ elif st.session_state.page == "step1_5":
     
     st.markdown("### 📄 抽出された英語スクリプト")
     
-    # 抽出したダイアログを改行でつないで表示する
-    extracted_dialog_text = "\n".join(st.session_state.dialogs)
+    display_lines = [f"**{d['speaker']}:** {d['text']}" for d in st.session_state.dialogs]
+    extracted_dialog_text = "\n".join(display_lines)
     st.text_area("英語セリフ部分", extracted_dialog_text, height=200, disabled=True)
     
     if st.button("🔊 ダイアログ全体を音声読み上げする"):
-        # 話者名（**等）を除去してgTTSで読み上げ
-        pure_text_lines = []
-        for line in st.session_state.dialogs:
-            cleaned = line.replace("**", "").replace("*", "")
-            if ":" in cleaned:
-                cleaned = cleaned.split(":", 1)[1]
-            pure_text_lines.append(cleaned.strip())
-        
+        pure_text_lines = [d['text'] for d in st.session_state.dialogs]
         full_speech_text = " ".join(pure_text_lines)
         if full_speech_text:
             tts = gTTS(text=full_speech_text, lang='en')
@@ -190,104 +190,61 @@ elif st.session_state.page == "step1_5":
     st.markdown("---")
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("➡️ ロールプレイ前半 (STEP 2) へ進む"):
+        if st.button("➡️ ロールプレイ実践 (STEP 2) へ進む"):
             st.session_state.page = "step2"
-            st.session_state.step2_index = 0
             st.rerun()
     with col2:
         if st.button("⏭️ ロールプレイをスキップしてクイズ (STEP 8) へ"):
             st.session_state.page = "step8"
             st.rerun()
 
-# 【STEP 2：ロールプレイ前半（AI先攻・ユーザー後攻）】
+# 【STEP 2：ロールプレイ実践（全体一覧表示 ＆ 選択した役で切り替え）】
 elif st.session_state.page == "step2":
-    st.subheader("STEP 2: ロールプレイ前半（AI先攻・あなた後攻）")
-    st.write("AIが最初の発話を行います。あなたのパートは画面を見ながら声に出して練習してください。")
+    st.subheader("STEP 2: ロールプレイ実践")
+    st.write("スクリプト全体を見ながら、自分の役のセリフは声に出して練習し、AIの役のセリフは音声ボタンで聞いて確認しましょう。")
     
     dialogs = st.session_state.dialogs
-    idx = st.session_state.step2_index
+    speakers = st.session_state.speakers
     
-    if dialogs and idx < len(dialogs):
-        current_line = dialogs[idx]
-        st.info(f"AIの発話ターン (第 {idx+1} / {len(dialogs)} 行)")
-        st.markdown(f"**AI:** {current_line}")
+    if speakers:
+        st.session_state.user_role = st.selectbox("あなたの役を選んでください：", speakers, index=speakers.index(st.session_state.user_role) if st.session_state.user_role in speakers else 0)
+    
+    st.markdown("---")
+    
+    for idx, d in enumerate(dialogs):
+        is_user_turn = (d["speaker"] == st.session_state.user_role)
         
-        # 音声自動生成・再生
-        cleaned_speech = current_line.replace("**", "").replace("*", "")
-        if ":" in cleaned_speech:
-            cleaned_speech = cleaned_speech.split(":", 1)[1]
-        tts = gTTS(text=cleaned_speech.strip(), lang='en')
-        fp = io.BytesIO()
-        tts.write_to_fp(fp)
-        fp.seek(0)
-        st.audio(fp, format='audio/mp3', autoplay=True)
-        
-        st.markdown("---")
-        col1, col2 = st.columns(2)
-        with col1:
-            if idx > 0 and st.button("◀️ ひとつ前に戻る"):
-                st.session_state.step2_index -= 1
-                st.rerun()
-        with col2:
-            if idx < len(dialogs) - 1:
-                if st.button("次に進む ▶️"):
-                    st.session_state.step2_index += 1
-                    st.rerun()
-            else:
-                if st.button("🎉 STEP 2 完了！次のステップへ"):
-                    st.session_state.page = "step3"
-                    st.session_state.step3_index = 0
-                    st.rerun()
-    else:
-        st.write("ダイアログが見つかりません。")
-        if st.button("次へ進む"):
-            st.session_state.page = "step3"
+        if is_user_turn:
+            st.info(f"👤 **{d['speaker']} (あなた):** {d['text']}  \n👉 *声に出して練習しましょう！*")
+        else:
+            st.warning(f"🤖 **{d['speaker']} (AI):** {d['text']}")
+            if st.button(f"🔊 {d['speaker']} のセリフを聴く (行 {idx+1})", key=f"audio_{idx}"):
+                tts = gTTS(text=d['text'], lang='en')
+                fp = io.BytesIO()
+                tts.write_to_fp(fp)
+                fp.seek(0)
+                st.audio(fp, format='audio/mp3', autoplay=True)
+        st.markdown("")
+
+    st.markdown("---")
+    
+    # 役柄交代ボタン ＆ 進行ボタン
+    if len(speakers) >= 2:
+        other_role = speakers[1] if st.session_state.user_role == speakers[0] else speakers[0]
+        if st.button(f"🔄 役柄を交代する（次は「{other_role}」役で練習する）"):
+            st.session_state.user_role = other_role
             st.rerun()
 
     st.markdown("---")
-    if st.button("⏩ STEP 2をすべてとばす（STEP 3へ）"):
-        st.session_state.page = "step3"
-        st.session_state.step3_index = 0
-        st.rerun()
-
-# 【STEP 3：ロールプレイ後半（ユーザー先攻・AI後攻）】
-elif st.session_state.page == "step3":
-    st.subheader("STEP 3: ロールプレイ後半（あなた先攻・AI後攻）")
-    st.write("あなたが先頭の発話を行い、AIが返事を行います。")
-    
-    dialogs = st.session_state.dialogs
-    idx = st.session_state.step3_index
-    
-    if dialogs and idx < len(dialogs):
-        current_line = dialogs[idx]
-        st.info(f"あなたの発話ターン (第 {idx+1} / {len(dialogs)} 行)")
-        st.markdown(f"**あなた:** {current_line} (声に出して読んでみましょう)")
-        
-        st.markdown("---")
-        col1, col2 = st.columns(2)
-        with col1:
-            if idx > 0 and st.button("◀️ ひとつ前に戻る", key="back3"):
-                st.session_state.step3_index -= 1
-                st.rerun()
-        with col2:
-            if idx < len(dialogs) - 1:
-                if st.button("次に進む ▶️", key="next3"):
-                    st.session_state.step3_index += 1
-                    st.rerun()
-            else:
-                if st.button("🎉 STEP 3 完了！理解度クイズへ"):
-                    st.session_state.page = "step8"
-                    st.rerun()
-    else:
-        st.write("ダイアログが見つかりません。")
-        if st.button("次へ進む"):
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("⬅️ スクリプト確認に戻る"):
+            st.session_state.page = "step1_5"
+            st.rerun()
+    with col2:
+        if st.button("🎉 ロールプレイ完了！理解度クイズへ"):
             st.session_state.page = "step8"
             st.rerun()
-
-    st.markdown("---")
-    if st.button("⏩ STEP 3をすべてとばす（クイズへ）"):
-        st.session_state.page = "step8"
-        st.rerun()
 
 # 【STEP 8：自動クイズ】
 elif st.session_state.page == "step8":
@@ -308,56 +265,4 @@ ANSWER: [正解の選択肢]
                 res = model.generate_content(quiz_prompt)
                 st.session_state.quiz_data = res.text
             except Exception as e:
-                st.session_state.quiz_data = "QUESTION: スクリプトの主要な目的は何ですか？\nCHOICES: 挨拶, 買い物, 日常会話\nANSWER: 買い物"
-                
-    st.text(st.session_state.quiz_data)
-    user_choice = st.text_input("答えの選択肢を入力してください：")
-    
-    if not st.session_state.quiz_submitted:
-        if st.button("解答を提出する"):
-            if user_choice.strip():
-                st.session_state.quiz_submitted = True
-                st.session_state.completed_today = True  # すべて完了！
-                st.rerun()
-            else:
-                st.warning("解答を入力してください。")
-    else:
-        st.success("解答を受け付けました！お疲れ様でした！")
-        if st.button("✨ モチベーション結果を見る"):
-            st.session_state.page = "motivation"
-            st.rerun()
-
-# 【モチベーション機能 ＆ 終了画面】
-elif st.session_state.page == "motivation":
-    st.title("🌟 本日の学習お疲れ様でした！")
-    
-    # スタンプ・連続日数のカウント処理
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    if st.session_state.last_study_date != today_str:
-        st.session_state.streak_count += 1
-        st.session_state.last_study_date = today_str
-        
-    # 画面表示
-    st.markdown("### 🏆 学習スタンプ獲得！")
-    st.success(f"ポンッ！ 🎯 本日の学習スタンプが押されました！")
-    st.info(f"🔥 現在の連続学習日数: **{st.session_state.streak_count} 日目**")
-    
-    st.markdown("### 🤖 AIからの褒めメッセージ ＆ バッジ")
-    st.markdown("> *「素晴らしい集中力でした！ロールプレイからクイズまで完璧にやり遂げましたね。今日培った英語表現はあなたの確実な力になっています！」*")
-    st.markdown("🏅 **獲得バッジ:** 【完全燃焼チャレンジャー】")
-    
-    st.markdown("---")
-    
-    # マイページへ飛ぶボタン
-    if st.button("📚 マイページ（履歴）を確認する"):
-        st.session_state.page = "mypage"
-        st.rerun()
-        
-    st.markdown("")
-    
-    # 今日の学習を終了して最初の画面に戻るボタン
-    if st.button("🏠 今日の学習を終了して最初の画面に戻る"):
-        st.session_state.page = "step1"
-        st.session_state.completed_today = False
-        st.session_state.quiz_submitted = False
-        st.rerun()
+                st.session_state.quiz_data = "QUESTION: スクリプトの主要な目的は何ですか？\nCHOICES: 挨拶, 買い物,
