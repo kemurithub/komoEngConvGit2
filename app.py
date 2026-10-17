@@ -50,18 +50,26 @@ if "streak_count" not in st.session_state:
 if "last_study_date" not in st.session_state:
     st.session_state.last_study_date = ""
 
-# --- ヘルパー関数: テキストからダイアログを抽出 ---
+# --- ヘルパー関数: テキストから英語完成スクリプト部分だけを正確に抽出 ---
 def parse_dialogs(text):
-    lines = text.split('\n')
+    target_section = text
+    if "【英語完成スクリプト】" in text:
+        parts = text.split("【英語完成スクリプト】")
+        if len(parts) > 1:
+            after_title = parts[1]
+            if "【日本語訳" in after_title:
+                target_section = after_title.split("【日本語訳")[0]
+            elif "---" in after_title:
+                target_section = after_title.split("---")[0]
+
+    lines = target_section.split('\n')
     parsed = []
     for line in lines:
         line = line.strip()
-        if not line:
-            continue
-        # **A:** などのパターンを想定
-        if "**" in line:
+        if line.startswith("**") and ":" in line:
             parsed.append(line)
-    return parsed if parsed else [l for l in lines if l.strip()]
+            
+    return parsed if parsed else [l for l in text.split('\n') if l.strip()]
 
 # --- サイドバー：ナビゲーション ---
 with st.sidebar:
