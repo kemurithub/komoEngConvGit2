@@ -65,7 +65,6 @@ def parse_text_content(text):
         if line.startswith("**") and ":" in line:
             parts = line.split(":", 1)
             speaker = parts[0].replace("**", "").replace("*", "").strip()
-            # セリフ中のマークダウン記号もきれいにしておく
             dialog_text = parts[1].replace("**", "").replace("*", "").strip()
             parsed_dialogs.append({"speaker": speaker, "text": dialog_text})
             speakers_set.add(speaker)
@@ -208,60 +207,4 @@ elif st.session_state.page == "step2":
     speakers = st.session_state.speakers
     
     if speakers:
-        st.session_state.user_role = st.selectbox("あなたの役を選んでください：", speakers, index=speakers.index(st.session_state.user_role) if st.session_state.user_role in speakers else 0)
-    
-    st.markdown("---")
-    
-    for idx, d in enumerate(dialogs):
-        is_user_turn = (d["speaker"] == st.session_state.user_role)
-        
-        if is_user_turn:
-            st.info(f"👤 **{d['speaker']} (あなた):** {d['text']}  \n👉 *声に出して練習しましょう！*")
-        else:
-            st.warning(f"🤖 **{d['speaker']} (AI):** {d['text']}")
-            if st.button(f"🔊 {d['speaker']} のセリフを聴く (行 {idx+1})", key=f"audio_{idx}"):
-                clean_speech_text = d['text'].replace("**", "").replace("*", "")
-                tts = gTTS(text=clean_speech_text, lang='en')
-                fp = io.BytesIO()
-                tts.write_to_fp(fp)
-                fp.seek(0)
-                st.audio(fp, format='audio/mp3', autoplay=True)
-        st.markdown("")
-
-    st.markdown("---")
-    
-    # 役柄交代ボタン
-    if len(speakers) >= 2:
-        other_role = speakers[1] if st.session_state.user_role == speakers[0] else speakers[0]
-        if st.button(f"🔄 役柄を交代する（次は「{other_role}」役で練習する）"):
-            st.session_state.user_role = other_role
-            st.rerun()
-
-    st.markdown("---")
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("⬅️ スクリプト確認に戻る"):
-            st.session_state.page = "step1_5"
-            st.rerun()
-    with col2:
-        if st.button("🎉 ロールプレイ完了！結果を見る"):
-            st.session_state.page = "motivation"
-            st.rerun()
-
-# 【モチベーション機能 ＆ Tips ＆ 終了画面】
-elif st.session_state.page == "motivation":
-    st.title("🌟 本日の学習お疲れ様でした！")
-    
-    # スタンプ・連続日数のカウント処理（会話練習完了時に即座に実行）
-    today_str = datetime.date.today().strftime("%Y-%m-%d")
-    if st.session_state.last_study_date != today_str:
-        st.session_state.streak_count += 1
-        st.session_state.last_study_date = today_str
-        
-    # 画面表示
-    st.markdown("### 🏆 学習スタンプ獲得！")
-    st.success(f"ポンッ！ 🎯 本日の学習スタンプが押されました！")
-    st.info(f"🔥 現在の連続学習日数: **{st.session_state.streak_count} 日目**")
-    
-    st.markdown("### 🤖 AIからの褒めメッセージ ＆ バッジ")
-    st.markdown("> *「両方の役柄でのロールプレイを完璧にやり遂
+        st.session_state.user_role = st.selectbox("あなたの役を選んでください：", speakers, index=speakers.index(st.session_state.user_role) if st.session_state.user_role in speakers
