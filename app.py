@@ -10,7 +10,7 @@ import calendar
 # ==========================================
 st.set_page_config(
     page_title="komoEngConv2026-Part2",
-    page_icon="🗣️",
+    page_icon="🎧",
     layout="centered",
     initial_sidebar_state="expanded"
 )
@@ -23,7 +23,7 @@ except Exception as e:
     st.stop()
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-2.5-flash')
+model = genai.GenerativeModel('gemini-3.8-flash')
 
 # --- セッション状態の初期化 ---
 if "page" not in st.session_state:
@@ -83,7 +83,7 @@ def parse_text_content(text):
 
 # --- サイドバー：ナビゲーション ---
 with st.sidebar:
-    st.title("🗣️ 後半アプリメニュー")
+    st.title("🎧 後半アプリメニュー")
     if st.button("🏠 マイページ（履歴一覧）"):
         st.session_state.page = "mypage"
         st.rerun()
@@ -138,25 +138,31 @@ if st.session_state.page == "mypage":
         st.session_state.page = "step1"
         st.rerun()
 
-# 【STEP 1：テキストファイルの読み込み】
+# 【STEP 1：テキストファイルの読み込み ＆ 編集】
 elif st.session_state.page == "step1":
-    st.title("🗣️ komoEngConvApp_2")
-    st.subheader("STEP 1: テキストファイルの読み込み")
-    st.write("前半アプリで作成したテキストファイルをアップロードするか、下のボックスに直接貼り付けてください。")
+    st.title("🗣️ ロールプレイ＆学習アプリ")
+    st.subheader("STEP 1: テキストファイルの読み込みと確認")
+    st.write("前半アプリで作成したテキストファイルをアップロードするか、下のボックスに直接貼り付けてください。必要に応じてテキストを編集・修正できます。")
     
     uploaded_file = st.file_uploader("テキストファイルをアップロード (.txt)", type=["txt"])
-    pasted_text = st.text_area("または、ここにテキストを直接貼り付け", height=150)
     
-    target_text = ""
+    # ファイルがアップロードされたら session_state にセット
     if uploaded_file is not None:
-        target_text = uploaded_file.getvalue().decode("utf-8")
-    elif pasted_text:
-        target_text = pasted_text
-        
+        file_text = uploaded_file.getvalue().decode("utf-8")
+        if file_text != st.session_state.raw_text:
+            st.session_state.raw_text = file_text
+
+    # 編集可能なテキストエリア
+    edited_text = st.text_area(
+        "読み込まれたテキスト（日本語訳の削除や英文の修正が自由にできます）", 
+        value=st.session_state.raw_text, 
+        height=250
+    )
+    st.session_state.raw_text = edited_text
+
     if st.button("読み込みを完了して次へ進む"):
-        if target_text.strip():
-            st.session_state.raw_text = target_text
-            d_list, s_list, t_text = parse_text_content(target_text)
+        if st.session_state.raw_text.strip():
+            d_list, s_list, t_text = parse_text_content(st.session_state.raw_text)
             st.session_state.dialogs = d_list
             st.session_state.speakers = s_list
             st.session_state.tips_text = t_text
@@ -167,13 +173,13 @@ elif st.session_state.page == "step1":
             today_str = datetime.date.today().strftime("%Y-%m-%d %H:%M")
             st.session_state.history.append({
                 "date": today_str,
-                "title": target_text[:100],
-                "text": target_text
+                "title": st.session_state.raw_text[:100],
+                "text": st.session_state.raw_text
             })
             st.session_state.page = "step1_5"
             st.rerun()
         else:
-            st.warning("⚠️ テキストファイルがアップロードされていないか、中身が空です。")
+            st.warning("⚠️ テキストが入力されていないか、中身が空です。")
 
 # 【STEP 1.5：スクリプト確認と音声読み上げ】
 elif st.session_state.page == "step1_5":
