@@ -81,6 +81,22 @@ def parse_text_content(text):
             
     return parsed_dialogs, list(speakers_set), extracted_tips
 
+# --- ヘルパー関数: 編集された対話テキスト（Format: **Speaker**: Text）からdialogsとspeakersをパース ---
+def parse_edited_dialogs(edited_text):
+    lines = edited_text.split('\n')
+    parsed_dialogs = []
+    speakers_set = set()
+    for line in lines:
+        line = line.strip()
+        if ":" in line:
+            parts = line.split(":", 1)
+            speaker = parts[0].replace("**", "").replace("*", "").strip()
+            dialog_text = parts[1].replace("**", "").replace("*", "").strip()
+            if speaker and dialog_text:
+                parsed_dialogs.append({"speaker": speaker, "text": dialog_text})
+                speakers_set.add(speaker)
+    return parsed_dialogs, list(speakers_set)
+
 # --- サイドバー：ナビゲーション ---
 with st.sidebar:
     st.title("🎧 後半アプリメニュー")
@@ -138,31 +154,25 @@ if st.session_state.page == "mypage":
         st.session_state.page = "step1"
         st.rerun()
 
-# 【STEP 1：テキストファイルの読み込み ＆ 編集】
+# 【STEP 1：テキストファイルの読み込み】
 elif st.session_state.page == "step1":
     st.title("🗣️ ロールプレイ＆学習アプリ")
-    st.subheader("STEP 1: テキストファイルの読み込みと確認")
-    st.write("前半アプリで作成したテキストファイルをアップロードするか、下のボックスに直接貼り付けてください。必要に応じてテキストを編集・修正できます。")
+    st.subheader("STEP 1: テキストファイルの読み込み")
+    st.write("前半アプリで作成したテキストファイルをアップロードするか、下のボックスに直接貼り付けてください。")
     
     uploaded_file = st.file_uploader("テキストファイルをアップロード (.txt)", type=["txt"])
+    pasted_text = st.text_area("または、ここにテキストを直接貼り付け", height=150)
     
-    # ファイルがアップロードされたら session_state にセット
+    target_text = ""
     if uploaded_file is not None:
-        file_text = uploaded_file.getvalue().decode("utf-8")
-        if file_text != st.session_state.raw_text:
-            st.session_state.raw_text = file_text
-
-    # 編集可能なテキストエリア
-    edited_text = st.text_area(
-        "読み込まれたテキスト（日本語訳の削除や英文の修正が自由にできます）", 
-        value=st.session_state.raw_text, 
-        height=250
-    )
-    st.session_state.raw_text = edited_text
-
+        target_text = uploaded_file.getvalue().decode("utf-8")
+    elif pasted_text:
+        target_text = pasted_text
+        
     if st.button("読み込みを完了して次へ進む"):
-        if st.session_state.raw_text.strip():
-            d_list, s_list, t_text = parse_text_content(st.session_state.raw_text)
+        if target_text.strip():
+            st.session_state.raw_text = target_text
+            d_list, s_list, t_text = parse_text_content(target_text)
             st.session_state.dialogs = d_list
             st.session_state.speakers = s_list
             st.session_state.tips_text = t_text
@@ -173,27 +183,40 @@ elif st.session_state.page == "step1":
             today_str = datetime.date.today().strftime("%Y-%m-%d %H:%M")
             st.session_state.history.append({
                 "date": today_str,
-                "title": st.session_state.raw_text[:100],
-                "text": st.session_state.raw_text
+                "title": target_text[:100],
+                "text": target_text
             })
             st.session_state.page = "step1_5"
             st.rerun()
         else:
-            st.warning("⚠️ テキストが入力されていないか、中身が空です。")
+            st.warning("⚠️ テキストファイルがアップロードされていないか、中身が空です。")
 
-# 【STEP 1.5：スクリプト確認と音声読み上げ】
+# 【STEP 1.5：スクリプト確認・編集と音声読み上げ】
 elif st.session_state.page == "step1_5":
     st.subheader("STEP 1.5: スクリプト確認と音声読み上げ")
-    st.write("読み込んだスクリプトです。話者名を除いたセリフ部分を音声で確認できます。")
+    st.write("抽出された英語スクリプトです。必要に応じて余分なテキストや日本語訳を削除・修正してください。")
     
-    st.markdown("### 📄 抽出された英語スクリプト")
+    st.markdown("### 📄 抽出された英語スクリプト（編集可能）")
     
-    display_lines = [f"**{d['speaker']}:** {d['text']}" for d in st.session_state.dialogs]
-    extracted_dialog_text = "\n".join(display_lines)
-    st.text_area("英語セリフ部分", extracted_dialog_text, height=200, disabled=True)
+    # 初期表示用のテキスト作成
+    display_lines = [f"**{d['speaker']}**: {d['text']}" for d in st.session_state.dialogs]
+    initial_dialog_text = "\n".join(display_lines)
+    
+    edited_dialog_text = st.text_area(
+        "英語セリフ部分（`**話者名**: セリフ` の形式で編集できます）", 
+        value=initial_dialog_text, 
+        height=220
+    )
     
     if st.button("🔊 ダイアログ全体を音声読み上げする"):
-        pure_text_lines = [d['text'].replace("**", "").replace("*", "") for d in st.session_state.dialogs]
+        # 編集後のテキストから最新のdialogsをパース
+        parsed_d, parsed_s = parse_edited_dialogs(edited_dialog_text)
+        if parsed_d:
+            st.session_state.dialogs = parsed_d
+            if parsed_s:
+                st.session_state.speakers = parsed_s
+                
+        pure_text_lines = [d['text'] for d in st.session_state.dialogs]
         full_speech_text = " ".join(pure_text_lines)
         if full_speech_text:
             tts = gTTS(text=full_speech_text, lang='en')
@@ -204,6 +227,14 @@ elif st.session_state.page == "step1_5":
             
     st.markdown("---")
     if st.button("➡️ ロールプレイ実践 (STEP 2) へ進む"):
+        # 画面遷移前に編集内容を確定・反映
+        parsed_d, parsed_s = parse_edited_dialogs(edited_dialog_text)
+        if parsed_d:
+            st.session_state.dialogs = parsed_d
+            if parsed_s:
+                st.session_state.speakers = parsed_s
+                if st.session_state.user_role not in parsed_s:
+                    st.session_state.user_role = parsed_s[1] if len(parsed_s) > 1 else parsed_s[0]
         st.session_state.page = "step2"
         st.rerun()
 
